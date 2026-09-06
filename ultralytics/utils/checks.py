@@ -815,7 +815,9 @@ def check_file(file, suffix="", download=True, download_dir=".", hard=True, sear
             downloads.safe_download(url=url, file=file, unzip=False)
         return str(file)
     else:  # search
-        files = glob.glob(str(search_dir / "**" / file), recursive=True) or glob.glob(str(ROOT.parent / file))
+        files = [
+            f for f in glob.glob(str(ROOT / "**" / file), recursive=True) if search_dir in Path(f).parents
+        ] or glob.glob(str(ROOT.parent / file))
         if not files and hard:
             raise FileNotFoundError(f"'{file}' does not exist")
         elif len(files) > 1 and hard:
