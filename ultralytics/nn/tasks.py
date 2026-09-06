@@ -87,6 +87,7 @@ from ultralytics.nn.modules import (
 from ultralytics.utils import (
     DEFAULT_CFG_DICT,
     LOGGER,
+    ROOT,
     SAFE_LOAD,
     SETTINGS,
     WINDOWS,
@@ -2362,7 +2363,9 @@ def yaml_model_load(path):
         path = path.with_name(new_stem + path.suffix)
 
     unified_path = re.sub(r"(\d+)([nslmx])(.+)?$", r"\1\3", str(path))  # i.e. yolov8x.yaml -> yolov8.yaml
-    yaml_file = check_yaml(path, hard=False) or check_yaml(unified_path)  # exact file wins over the unified config
+    yaml_file = check_yaml(path, hard=False, search_dir=ROOT / "cfg/models") or check_yaml(
+        unified_path, search_dir=ROOT / "cfg/models"
+    )  # exact file wins over the unified config
     d = YAML.load(yaml_file)  # model dict
     d["scale"] = guess_model_scale(path)
     d["yaml_file"] = str(path)

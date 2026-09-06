@@ -7,6 +7,7 @@
 
 # Parameters
 nc: 80 # number of classes
+hyp: yolo27.yaml
 scales: # model compound scaling constants
   # [depth, width, max_channels]
   m: [1.00, 1.00, 512]

@@ -11,6 +11,7 @@
 
 # Parameters
 nc: 80 # number of classes
+hyp: yolo27.yaml
 end2end: True # whether to use end-to-end mode
 reg_max: 1 # DFL bins
 aux_fg: True # training-only class-agnostic foreground branch on the Detect head (mix target, o2m schedule)

@@ -13,7 +13,7 @@ from PIL import Image
 
 from ultralytics.cfg import QUANTIZE_ALIASES, TASK2DATA, _handle_deprecation, get_cfg, get_save_dir
 from ultralytics.engine.results import Results
-from ultralytics.nn.tasks import BaseModel, guess_model_task, load_checkpoint, yaml_model_load
+from ultralytics.nn.tasks import BaseModel, guess_model_scale, guess_model_task, load_checkpoint, yaml_model_load
 from ultralytics.utils import (
     ARGV,
     ASSETS,
@@ -797,9 +797,8 @@ class Model(torch.nn.Module):
         checkpoint and updating model and configuration after training. It checks for pip updates and combines default
         configurations, method-specific defaults, and user-provided arguments to configure the training process.
 
-        New training uses the sparse recipe mapped from the embedded model YAML in ``cfg/hyps/models.yaml``.
-        Task suffixes share their model size's recipe. Explicit ``cfg`` values and keyword arguments take precedence.
-        Resumed training keeps its saved hyperparameters.
+        New YOLO27 training uses the size's detection YAML ``hyp`` recipe across all tasks. Explicit ``cfg`` values
+        and keyword arguments take precedence. Resumed training keeps its saved hyperparameters.
 
         Args:
             trainer (BaseTrainer, optional): Custom trainer instance for model training. If None, uses default.
@@ -841,13 +840,12 @@ class Model(torch.nn.Module):
                 )
                 kwargs["resume"] = False
         hyps = {}
-        if not kwargs.get("resume", overrides.get("resume")):
-            model_yaml = getattr(self.model, "yaml", {})
-            model_name = Path(model_yaml.get("yaml_file", "")).stem.split("-")[0].split("_")[0]
-            if scale := model_yaml.get("scale"):
-                model_name = model_name.rstrip("nsmlx") + scale
-            if hyp := YAML.load(ROOT / "cfg/hyps/models.yaml").get(model_name):
-                hyps = YAML.load(ROOT / "cfg/hyps" / hyp)
+        model_yaml = getattr(self.model, "yaml", {})
+        model_name = Path(model_yaml.get("yaml_file", "")).name
+        if model_name.startswith("yolo27") and not kwargs.get("resume", overrides.get("resume")):
+            scale = model_yaml.get("scale") or guess_model_scale(model_name) or "n"
+            hyp = yaml_model_load(ROOT / "cfg/models/27" / f"yolo27{scale}.yaml")["hyp"]
+            hyps = YAML.load(ROOT / "cfg/hyps" / hyp)
         custom = {
             # NOTE: handle the case when 'cfg' includes 'data'.
             "data": (overrides.get("data") if kwargs.get("cfg") else None)

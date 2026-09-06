@@ -1,7 +1,0 @@
-# Model YAML stems share recipes across task suffixes and checkpoint filenames.
-yolo27: yolo27nsm.yaml
-yolo27n: yolo27nsm.yaml
-yolo27s: yolo27nsm.yaml
-yolo27m: yolo27nsm.yaml
-yolo27l: yolo27lx.yaml
-yolo27x: yolo27lx.yaml

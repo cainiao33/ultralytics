@@ -762,7 +762,7 @@ def check_model_file_from_stem(model: str = "yolo11n") -> str | Path:
     return model
 
 
-def check_file(file, suffix="", download=True, download_dir=".", hard=True):
+def check_file(file, suffix="", download=True, download_dir=".", hard=True, search_dir=ROOT):
     """Search/download file (if necessary), check suffix (if provided), and return path.
 
     Args:
@@ -771,6 +771,7 @@ def check_file(file, suffix="", download=True, download_dir=".", hard=True):
         download (bool): Whether to download the file if it doesn't exist locally.
         download_dir (str): Directory to download the file to.
         hard (bool): Whether to raise an error if the file is not found.
+        search_dir (Path): Directory to search for packaged files.
 
     Returns:
         (str | list): Path to the file, or an empty list if not found.
@@ -814,7 +815,7 @@ def check_file(file, suffix="", download=True, download_dir=".", hard=True):
             downloads.safe_download(url=url, file=file, unzip=False)
         return str(file)
     else:  # search
-        files = glob.glob(str(ROOT / "**" / file), recursive=True) or glob.glob(str(ROOT.parent / file))  # find file
+        files = glob.glob(str(search_dir / "**" / file), recursive=True) or glob.glob(str(ROOT.parent / file))
         if not files and hard:
             raise FileNotFoundError(f"'{file}' does not exist")
         elif len(files) > 1 and hard:
@@ -822,18 +823,19 @@ def check_file(file, suffix="", download=True, download_dir=".", hard=True):
         return files[0] if len(files) else []  # return file
 
 
-def check_yaml(file, suffix=(".yaml", ".yml"), hard=True):
+def check_yaml(file, suffix=(".yaml", ".yml"), hard=True, search_dir=ROOT):
     """Search/download YAML file (if necessary) and return path, checking suffix.
 
     Args:
         file (str | Path): File name or path.
         suffix (tuple): Tuple of acceptable YAML file suffixes.
         hard (bool): Whether to raise an error if the file is not found or multiple files are found.
+        search_dir (Path): Directory to search for packaged files.
 
     Returns:
         (str): Path to the YAML file.
     """
-    return check_file(file, suffix, hard=hard)
+    return check_file(file, suffix, hard=hard, search_dir=search_dir)
 
 
 def check_is_path_safe(basedir: Path | str, path: Path | str) -> bool:
