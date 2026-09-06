@@ -1,0 +1,14 @@
+optimizer: AdamW
+lr0: 0.0005
+lrf: 0.5
+weight_decay: 0.000125
+warmup_epochs: 0.27
+momentum: 0.9
+warmup_momentum: 0.9
+warmup_bias_lr: 0.0
+nbs: 16
+mosaic: 0.5
+mixup: 0.5
+copy_paste: 0.5
+scale: 0.9
+close_mosaic: 0

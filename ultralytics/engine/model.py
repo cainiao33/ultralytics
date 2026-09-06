@@ -21,6 +21,7 @@ from ultralytics.utils import (
     LOGGER,
     PLATFORM_URL,
     RANK,
+    ROOT,
     SETTINGS,
     YAML,
     callbacks,
@@ -796,6 +797,10 @@ class Model(torch.nn.Module):
         checkpoint and updating model and configuration after training. It checks for pip updates and combines default
         configurations, method-specific defaults, and user-provided arguments to configure the training process.
 
+        New training uses the sparse recipe mapped from the embedded model YAML in ``cfg/hyps/models.yaml``.
+        Task suffixes share their model size's recipe. Explicit ``cfg`` values and keyword arguments take precedence.
+        Resumed training keeps its saved hyperparameters.
+
         Args:
             trainer (BaseTrainer, optional): Custom trainer instance for model training. If None, uses default.
             **kwargs (Any): Arbitrary keyword arguments for training configuration. Common options include:
@@ -825,6 +830,24 @@ class Model(torch.nn.Module):
         checks.check_pip_update_available()
 
         overrides = YAML.load(checks.check_yaml(kwargs["cfg"])) if kwargs.get("cfg") else self.overrides
+        if kwargs.get("resume", overrides.get("resume")) is True:
+            if self.ckpt and self.ckpt.get("epoch", -1) >= 0 and self.ckpt.get("optimizer") is not None:
+                kwargs["resume"] = self.ckpt_path
+            else:
+                LOGGER.warning(
+                    f"model '{self.ckpt_path}' is not a resumable training checkpoint "
+                    f"(missing epoch/optimizer state). Use 'resume' only to continue incomplete training. "
+                    f"Starting new training instead."
+                )
+                kwargs["resume"] = False
+        hyps = {}
+        if not kwargs.get("resume", overrides.get("resume")):
+            model_yaml = getattr(self.model, "yaml", {})
+            model_name = Path(model_yaml.get("yaml_file", "")).stem.split("-")[0].split("_")[0]
+            if scale := model_yaml.get("scale"):
+                model_name = model_name.rstrip("nsmlx") + scale
+            if hyp := YAML.load(ROOT / "cfg/hyps/models.yaml").get(model_name):
+                hyps = YAML.load(ROOT / "cfg/hyps" / hyp)
         custom = {
             # NOTE: handle the case when 'cfg' includes 'data'.
             "data": (overrides.get("data") if kwargs.get("cfg") else None)
@@ -833,7 +856,7 @@ class Model(torch.nn.Module):
             "model": self.overrides["model"],
             "task": self.task,
         }  # method defaults
-        args = {**overrides, **custom, **kwargs, "mode": "train"}  # prioritizes rightmost args
+        args = {**hyps, **overrides, **custom, **kwargs, "mode": "train"}  # prioritizes rightmost args
         if isinstance(args.get("data"), (list, tuple)):  # fine-tune a single base model across multiple datasets
             from ultralytics.engine.trainer import MultiTrainer
 
@@ -847,17 +870,6 @@ class Model(torch.nn.Module):
             self.metrics = self.trainer.train()
             return self.metrics
         pretrained = kwargs.get("pretrained", overrides.get("pretrained", True) if kwargs.get("cfg") else True)
-        if args.get("resume") is True:  # resume=True (boolean) uses current model as checkpoint
-            if self.ckpt and self.ckpt.get("epoch", -1) >= 0 and self.ckpt.get("optimizer") is not None:
-                args["resume"] = self.ckpt_path
-            else:
-                LOGGER.warning(
-                    f"model '{self.ckpt_path}' is not a resumable training checkpoint "
-                    f"(missing epoch/optimizer state). Use 'resume' only to continue incomplete training. "
-                    f"Starting new training instead."
-                )
-                args["resume"] = False
-
         self.trainer = (trainer or self._smart_load("trainer"))(overrides=args, _callbacks=self.callbacks)
         if not args.get("resume") and self.ckpt:
             # Reuse the already-loaded checkpoint model to avoid re-resolving remote weight sources during trainer setup.
