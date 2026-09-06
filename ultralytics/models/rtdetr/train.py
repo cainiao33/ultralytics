@@ -105,8 +105,8 @@ class DEIMTrainer(RTDETRTrainer):
     _epoch_callback_registered = False
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
-        """Initialize the DEIM trainer, discounting the backbone LR and warming biases from 0 like every other group."""
-        super().__init__(cfg, {"backbone_lr_ratio": 0.1, "warmup_bias_lr": 0.0, **(overrides or {})}, _callbacks)
+        """Initialize the DEIM trainer with a 0.1 backbone LR ratio and no separate bias warmup LR."""
+        super().__init__(cfg, {"backbone_lr_ratio": 0.1, **(overrides or {}), "warmup_bias_lr": 0.0}, _callbacks)
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Build YOLODETRDetectionModel and load weights; cls-head rows remap by class name inside model.load().
