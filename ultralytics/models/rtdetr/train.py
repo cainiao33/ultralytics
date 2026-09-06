@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from copy import copy
 
-from torch import nn, optim
+from torch import optim
 
 from ultralytics.cfg import DEFAULT_CFG
 from ultralytics.data.utils import get_split_fraction
@@ -105,8 +105,8 @@ class DEIMTrainer(RTDETRTrainer):
     _epoch_callback_registered = False
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
-        """Initialize the DEIM trainer with a 0.1 default backbone learning-rate ratio."""
-        super().__init__(cfg, {"backbone_lr_ratio": 0.1, **(overrides or {})}, _callbacks)
+        """Initialize the DEIM trainer, discounting the backbone LR and warming biases from 0 like every other group."""
+        super().__init__(cfg, {"backbone_lr_ratio": 0.1, "warmup_bias_lr": 0.0, **(overrides or {})}, _callbacks)
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Build YOLODETRDetectionModel and load weights; cls-head rows remap by class name inside model.load().
@@ -218,7 +218,7 @@ class DEIMTrainer(RTDETRTrainer):
         return RTDETRValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args))
 
     def build_optimizer(self, model, name="auto", lr=0.001, momentum=0.9, decay=1e-5, iterations=1e5):
-        """Build optimizer with 6 param groups split head/backbone; 'auto' resolves to AdamW with DEIM LR defaults.
+        """Resolve 'auto' to the DEIM AdamW defaults, then group parameters with the shared BaseTrainer builder.
 
         Args:
             model (nn.Module): Model whose parameters are grouped.
@@ -226,79 +226,16 @@ class DEIMTrainer(RTDETRTrainer):
             lr (float): Learning rate for the head groups; the backbone groups scale it by backbone_lr_ratio.
             momentum (float): Momentum or beta1, depending on the optimizer.
             decay (float): Weight decay applied to the weight groups only.
-            iterations (float): Total training iterations, used by the auto resolver.
+            iterations (float): Total training iterations, unused here since auto never consults it.
 
         Returns:
-            (torch.optim.Optimizer): Optimizer with six parameter groups.
-
-        Notes:
-            Groups 0-2 hold the head weights, norms, and biases; groups 3-5 hold the backbone equivalents. Norm
-            and bias groups get no weight decay.
+            (torch.optim.Optimizer): Optimizer whose backbone groups run at lr * backbone_lr_ratio.
         """
-        backbone_lr_ratio = float(self.args.backbone_lr_ratio)
-        if backbone_lr_ratio <= 0:
-            raise ValueError(f"Invalid backbone_lr_ratio={backbone_lr_ratio}. Expected > 0.")
-        model = unwrap_model(model)  # so .yaml access and parameter names work identically under DDP and single-GPU
-        g = [{}, {}, {}, {}, {}, {}]  # head: [0 weight, 1 bn, 2 bias]; backbone: [3 weight, 4 bn, 5 bias]
-        bn = tuple(v for k, v in nn.__dict__.items() if "Norm" in k)
-        if name == "auto":
+        if str(name).lower() == "auto":
             name, lr, momentum = "AdamW", 5e-4, 0.9
-            self.args.warmup_momentum, self.args.warmup_bias_lr = momentum, 0.0  # no bias/momentum warmup for Adam
+            self.args.warmup_momentum = momentum
             LOGGER.info(
                 f"{colorstr('optimizer:')} 'optimizer=auto' found, ignoring 'lr0={self.args.lr0}' and "
                 f"'momentum={self.args.momentum}' and using DEIM defaults '{name}', 'lr0={lr}', 'momentum={momentum}'..."
             )
-        backbone_len = len(model.yaml["backbone"])
-
-        for module_name, module in model.named_modules():
-            for param_name, param in module.named_parameters(recurse=False):
-                fullname = f"{module_name}.{param_name}" if module_name else param_name
-                parts = fullname.split(".")
-                is_backbone = (
-                    len(parts) > 1 and parts[0] == "model" and parts[1].isdigit() and int(parts[1]) < backbone_len
-                )
-                is_norm_like_param = (
-                    isinstance(module, bn) or module.__class__.__name__ == "DEIMRMSNorm" or "logit_scale" in fullname
-                )
-                if is_backbone:
-                    if "bias" in fullname:
-                        g[5][fullname] = param  # backbone bias
-                    elif is_norm_like_param:
-                        g[4][fullname] = param  # backbone bn
-                    else:
-                        g[3][fullname] = param  # backbone weight (decay)
-                else:
-                    if "bias" in fullname:
-                        g[2][fullname] = param  # head bias
-                    elif is_norm_like_param:
-                        g[1][fullname] = param  # head bn
-                    else:
-                        g[0][fullname] = param  # head weight (decay)
-
-        g = [list(x.values()) for x in g]
-        optimizers = {"Adam", "Adamax", "AdamW", "NAdam", "RAdam", "RMSProp", "SGD"}
-        if name not in optimizers:
-            raise NotImplementedError(f"Optimizer '{name}' not supported by DEIMTrainer.")
-
-        backbone_lr = lr * backbone_lr_ratio
-        if name in {"Adam", "Adamax", "AdamW", "NAdam", "RAdam"}:
-            optimizer = getattr(optim, name)(g[2], lr=lr, betas=(momentum, 0.999), weight_decay=0.0)
-        elif name == "RMSProp":
-            optimizer = optim.RMSprop(g[2], lr=lr, momentum=momentum)
-        else:  # SGD
-            optimizer = optim.SGD(g[2], lr=lr, momentum=momentum, nesterov=True)
-
-        # Head groups (lr)
-        optimizer.add_param_group({"params": g[0], "weight_decay": decay})  # head weights
-        optimizer.add_param_group({"params": g[1], "weight_decay": 0.0})  # head bn
-        # Backbone groups (backbone_lr)
-        optimizer.add_param_group({"params": g[5], "lr": backbone_lr, "weight_decay": 0.0})  # backbone bias
-        optimizer.add_param_group({"params": g[3], "lr": backbone_lr, "weight_decay": decay})  # backbone weights
-        optimizer.add_param_group({"params": g[4], "lr": backbone_lr, "weight_decay": 0.0})  # backbone bn
-
-        LOGGER.info(
-            f"{colorstr('optimizer:')} {type(optimizer).__name__} with parameter groups:\n"
-            f"  Head:     {len(g[1])} bn, {len(g[0])} weight(decay={decay}), {len(g[2])} bias (lr={lr})\n"
-            f"  Backbone: {len(g[4])} bn, {len(g[3])} weight(decay={decay}), {len(g[5])} bias (lr={backbone_lr})"
-        )
-        return optimizer
+        return super().build_optimizer(model, name, lr, momentum, decay, iterations)

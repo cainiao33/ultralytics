@@ -1105,7 +1105,6 @@ class BaseTrainer:
             (torch.optim.Optimizer): The constructed optimizer.
         """
         g = [{}, {}, {}, {}]  # optimizer parameter groups
-        bn = tuple(v for k, v in nn.__dict__.items() if "Norm" in k)  # normalization layers, i.e. BatchNorm2d()
         optimizers = {"Adam", "Adamax", "AdamW", "NAdam", "RAdam", "RMSprop", "SGD", "MuSGD", "auto"}
         name = {x.lower(): x for x in optimizers}.get(str(name).lower(), str(name))
         if name == "auto":
@@ -1127,8 +1126,8 @@ class BaseTrainer:
                     g[3][fullname] = param  # muon params
                 elif "bias" in fullname:  # bias (no decay)
                     g[2][fullname] = param
-                elif isinstance(module, bn) or "logit_scale" in fullname:  # weight (no decay)
-                    # ContrastiveHead and BNContrastiveHead included here with 'logit_scale'
+                elif "Norm" in type(module).__name__ or "logit_scale" in fullname:  # weight (no decay)
+                    # matches torch norms plus custom ones like DEIMRMSNorm; 'logit_scale' is ContrastiveHead
                     g[1][fullname] = param
                 else:  # weight (with decay)
                     g[0][fullname] = param
@@ -1187,6 +1186,7 @@ class BaseTrainer:
         LOGGER.info(
             f"{colorstr('optimizer:')} {type(optimizer).__name__}(lr={lr}, momentum={momentum}) with parameter groups "
             f"{num_params[1]} weight(decay=0.0), {num_params[0]} weight(decay={decay}), {num_params[2]} bias(decay=0.0)"
+            + (f", backbone groups at lr={lr * blr}" if prefixes else "")
         )
         return optimizer
 
