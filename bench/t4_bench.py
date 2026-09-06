@@ -6,15 +6,14 @@ Given no arm list a session profiles that scale's baseline, its bridge and every
 TensorRT is timed, the other formats run once afterwards into a `.formats.csv` sidecar, see t4_bench_common for
 why. `warmup=N` overrides the standard conditioning and marks the session exploratory, see run_benchmark.
 
-The bridge is the arm carried by every session at a scale. Lane A uses its YOLO26 Conv baseline itself, so every
-candidate transfers through its same-session ratio to Conv. Lane B uses ffnattn2 because its baseline family changes
-across scales. A second argument, a comma list of arm tags, times only those arms and the required anchors.
+The bridge is the arm carried by every session at a scale. Lane A uses its YOLO26 Conv baseline and Lane B uses
+ffnattn2. A second argument, a comma list of arm tags, times only those arms and the required anchors.
 
 Scale comes from the filename, and a scale-less stem silently resolves to the first scales key, so every entry has
 its size letter substituted in. Arms absent at a scale are simply not in that session.
 
-Every arm in a session runs at the baseline's deployed input size, from `IMGSZ` below, since a paired comparison
-only holds at one size. Lane A deploys at 640 throughout, Lane B does not.
+Every arm in a session runs at the same input size, from `IMGSZ` below, since a paired comparison only holds at one
+size. Lane A uses 640 throughout, Lane B keeps its historical per-scale sizes.
 """
 
 import sys
@@ -30,11 +29,10 @@ from ultralytics import RTDETR, YOLO
 
 DATA = Path("/root/autodl-tmp/data")
 
-# The size each lane's baseline deploys at, per scale, defaulting to 640. yolo27-detr trains n at 480 and s and m
-# at 512, so timing those at 640 measures an operating point nobody ships.
+# Keep paired sessions at their historical per-scale input sizes, defaulting to 640.
 IMGSZ = {("lane-b", "n"): 480, ("lane-b", "s"): 512, ("lane-b", "m"): 512}
 
-# lane -> (facade, engine builder, baseline tag prefix, bridge tag, {arm: (yaml template, scales)}).
+# lane -> (facade, engine builder, baseline tag, bridge tag, {arm: (yaml template, scales)}).
 #
 # Lane A exports stock, Lane B with the fp32 attention pin DINOv3 needs to survive fp16, so only within-lane ratios
 # travel.
@@ -85,39 +83,14 @@ LANES = {
             "deep16-sni-conv": ("yolo26{s}-p4p5-wide-deep16-sni.yaml", "ns"),
             "slim19-conv": ("yolo26{s}-p4p5-wide-slim19.yaml", "s"),
             "y11-p2p3p4p5p6": ("yolo11s-p2p3p4p5p6.yaml", "s"),
-            "y27-p3-170826-1": ("yolo27{s}-p3-170826-1.yaml", "ns"),
-            "y27-p3-170826-2": ("yolo27{s}-p3-170826-2.yaml", "ns"),
-            "y27-p2lite-190826-1": ("yolo27{s}-p2lite-190826-1.yaml", "ns"),
-            "y27-p3-repcib-190826-2": ("yolo27{s}-p3-repcib-190826-2.yaml", "ns"),
-            "y27-p2wide-190826-3": ("yolo27{s}-p2wide-190826-3.yaml", "ns"),
-            "y27-p2wide-repcib-190826-4": ("yolo27{s}-p2wide-repcib-190826-4.yaml", "n"),
-            "y27-p3-p5repcib-200826-1": ("yolo27{s}-p3-p5repcib-200826-1.yaml", "ns"),
-            "y27-p2wide-undamped-p5repcib-200826-2": (
-                "yolo27{s}-p2wide-undamped-p5repcib-200826-2.yaml",
-                "ns",
-            ),
-            "y27-p3-undamped-p5repcib-200826-2": ("yolo27{s}-p3-undamped-p5repcib-200826-2.yaml", "s"),
-            "y27-p2lsk-p5pki-220826-1": ("yolo27{s}-p2lsk-p5pki-220826-1.yaml", "n"),
-            "y27-p2pki-p5lsk-220826-2": ("yolo27{s}-p2pki-p5lsk-220826-2.yaml", "n"),
-            "y27-p2local-p5pki-230826-1": ("yolo27{s}-p2local-p5pki-230826-1.yaml", "ns"),
-            "y27-p2local-p5lsk-230826-2": ("yolo27{s}-p2local-p5lsk-230826-2.yaml", "ns"),
-            "y27-ultravit-170826-1": ("yolo27{s}-ultravit-170826-1.yaml", "ns"),
-            "y27-ultravit-170826-2": ("yolo27{s}-ultravit-170826-2.yaml", "ns"),
-            "y27-ultravit-170826-3": ("yolo27{s}-ultravit-170826-3.yaml", "ns"),
-            "y27-ultravit-170826-4": ("yolo27{s}-ultravit-170826-4.yaml", "ns"),
         },
     ),
     "lane-b": (
         RTDETR,
         pinned_fp32_attn,
-        "yolo27",
+        "ffnattn2",
         "ffnattn2",
         {
-            # The detr_decoder_clean2 reference arms. The family changes along the ladder: CSP trunk with
-            # RTDETRDecoderEfficient at n and s, DeimDecoder at m and l, plain ViT trunk at x.
-            "yolo27": ("yolo27{s}-detr.yaml", "ns"),
-            "yolo27-deim": ("yolo27{s}-deim-detr.yaml", "ml"),
-            "yolo27-vit": ("yolo27{s}-vit-detr.yaml", "x"),
             "dinov3splus": ("deim_dinov3splus_sta_l6_xl.yaml", "x"),
             "attn2": ("yolo26{s}-ultravit-attn2-deim_mal_deimv2Neck.yaml", "nsmlx"),
             "base": ("yolo26{s}-ultravit-deim_mal_deimv2Neck.yaml", "nsmlx"),
@@ -152,10 +125,8 @@ LANES = {
 }
 
 lane, scale, session, only, warmup = parse_session(sys.argv[1:])
-model_cls, engine_builder, base_prefix, bridge, arms = LANES[lane]
+model_cls, engine_builder, baseline, bridge, arms = LANES[lane]
 yamls = {tag: t.format(s=scale) for tag, (t, scales) in arms.items() if scale in scales}
-# Lane B's baseline changes file along the ladder, so it is whichever arm carries the baseline prefix at this scale.
-baseline = next(tag for tag in yamls if tag.startswith(base_prefix))
 assert bridge in yamls, f"{session} has no bridge arm, so its ratios cannot be anchored to another session"
 if only:  # append session, carrying the named arms plus the baseline and bridge that anchor them
     (arg,) = only  # unpack, so a stray extra argument fails here rather than being ignored

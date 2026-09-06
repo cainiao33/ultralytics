@@ -48,7 +48,6 @@ Flags:
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
@@ -62,7 +61,6 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")  # before torch: BLAS pools size a
 import torch
 
 from callbacks import nfs_sync, paths, wandb_config
-from callbacks.cls_map import ClsMapTrainer
 from ultralytics import YOLO
 from ultralytics.nn.tasks import guess_model_scale, load_checkpoint
 from ultralytics.nn.teacher_model import TEACHER_REGISTRY, safe_key
@@ -184,14 +182,6 @@ _AUG_ARGS = dict(
 # Every-mode defaults kept out of recipe profiles, recipes override via a later merge.
 # muon/sgd 0.5/0.5 suggested by Jing.
 _TRAIN_DEFAULTS = {"grad_clip": 1.0, "muon": 0.5, "sgd": 0.5}
-
-
-def _load_cls_table(vocab: str) -> dict:
-    """Return the per-dataset class maps for a source vocabulary."""
-    tables = json.loads((Path(_REPO_ROOT) / "cfg" / "ul33_cls_map.json").read_text())
-    if vocab not in tables:
-        raise SystemExit(f"ERROR: --cls_map {vocab!r} not in {sorted(tables)}")
-    return tables[vocab]
 
 
 def _resume_mode(train_args: dict) -> str:
@@ -569,7 +559,6 @@ def main(argv: list[str]) -> None:
     argv, recipe_name = _pop_flag(argv, "--recipe")
     argv, model_override = _pop_flag(argv, "--model")
     argv, data_override = _pop_flag(argv, "--data")
-    argv, cls_map_vocab = _pop_flag(argv, "--cls_map")
     argv, scratch = _pop_flag(argv, "--scratch", is_bool=True)
     argv, datasets_arg = _pop_flag(argv, "--datasets")
     argv, imgsz_override = _pop_flag(argv, "--imgsz")
@@ -644,10 +633,6 @@ def main(argv: list[str]) -> None:
     if data_override and mode not in _COCO_DET_MODES:
         raise SystemExit(f"ERROR: --data is not supported for mode={mode!r}.")
 
-    # The alias trainer is detection-only. Pose and OBB retain automatic same-name remapping.
-    if cls_map_vocab and mode not in (*_COCO_DET_MODES, "obj365v1_det_pretrain"):
-        raise SystemExit(f"ERROR: --cls_map is not supported for mode={mode!r}.")
-
     if "," in gpu and mode not in _DDP_CAPABLE_MODES:
         raise SystemExit(
             f"ERROR: mode={mode!r} needs a single GPU. dist.py:79 rebuilds the trainer per DDP child with "
@@ -687,7 +672,6 @@ def main(argv: list[str]) -> None:
             pretrained_from=phase1_weights,
             phase1_wandb_id=phase1_wandb_id,
             mode=mode,
-            cls_map=cls_map_vocab or None,
             wandb_group=wandb_group,
         ),
     )
@@ -902,14 +886,10 @@ def main(argv: list[str]) -> None:
         print("[scratch] pretrained=False, backbone will be randomly initialized")
     if lr_find_only:
         train_args["lr_find_only"] = True
-    if cls_map_vocab:
-        cls_map = _load_cls_table(cls_map_vocab).get(Path(train_args["data"]).stem, {})
-        os.environ["PHASE2_CLS_MAP"] = json.dumps(cls_map)
-        print(f"[{mode}] cls_map={cls_map_vocab}: manual head-row transfer, rows={len(cls_map)}")
     # Started from the runner rather than a trainer callback so it survives DDP: under DDP this process is the
     # launcher, which blocks in subprocess.run for the whole run while the children write into save_dir.
     sync_stop = nfs_sync.start(train_args["save_dir"])
-    model.train(trainer=ClsMapTrainer if cls_map_vocab else None, **train_args)
+    model.train(**train_args)
     sync_stop()
 
 
