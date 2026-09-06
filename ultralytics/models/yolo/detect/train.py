@@ -15,7 +15,7 @@ from ultralytics.data import build_dataloader, build_yolo_dataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
 from ultralytics.nn.modules import Detect
-from ultralytics.nn.tasks import DetectionModel
+from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.patches import override_configs, torch_load
 from ultralytics.utils.plotting import plot_images, plot_labels
@@ -186,6 +186,20 @@ class DetectionTrainer(BaseTrainer):
         model.class_weights = torch.from_numpy(weights).to(self.device)
         LOGGER.info(f"Class weights: {model.class_weights.cpu().numpy().round(3)}")
 
+    def head_cfg(self, cfg: str | dict | None) -> str | dict | None:
+        """Inject the ``o2o_grad`` train arg into the model YAML dict.
+
+        Carrying it on ``args`` rather than in a YAML keeps one config per architecture: the knob is set with
+        ``o2o_grad=0.1`` on the launch command instead of a family of near-identical model YAMLs. It lands in
+        ``model.yaml``, so the head is rebuilt the same way on resume, val and export.
+        """
+        lam = getattr(self.args, "o2o_grad", 0.0) or 0.0
+        if not cfg or not lam:
+            return cfg
+        cfg = dict(cfg) if isinstance(cfg, dict) else yaml_model_load(cfg)
+        cfg["o2o_grad"] = lam
+        return cfg
+
     def get_model(self, cfg: str | None = None, weights: str | None = None, verbose: bool = True):
         """Return a YOLO detection model.
 
@@ -203,7 +217,9 @@ class DetectionTrainer(BaseTrainer):
         Detect.half_box = bool(getattr(self.args, "half_channel_box", False))  # box-head width only
         Detect.half_cls = bool(getattr(self.args, "half_channel_cls", False))  # cls-head width only
         model = self.set_model_names_for_load(
-            DetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+            DetectionModel(
+                self.head_cfg(cfg), nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1
+            )
         )
         head = model.model[-1]
         p3_stride = float(getattr(self.args, "p3_stride", 8))

@@ -213,6 +213,7 @@ CFG_FRACTION_KEYS = frozenset(
         "lr0",
         "lrf",
         "cls_pw",
+        "o2o_grad",
         "momentum",
         "weight_decay",
         "warmup_momentum",

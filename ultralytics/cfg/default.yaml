@@ -137,6 +137,7 @@ nwd: False # (bool) replace the CIoU box loss with Normalized Wasserstein Distan
 nwd_c: 12.8 # (float) NWD normalization constant in pixels (dataset mean object size, per arXiv:2110.13389)
 l1_scale: norm # (str) when reg_max=1, box L1 loss scale: 'norm' (image-normalized) or 'feat' (feature-map grid scale with Smooth L1; smooth_l1/smooth_l1_beta are code-only)
 dfl: 1.5 # (float) distribution focal loss gain
+o2o_grad: 0.0 # (float) fraction of the one2one loss gradient reaching the trunk (0.0 = detached, the default)
 pose: 12.0 # (float) pose loss gain (pose tasks)
 kobj: 1.0 # (float) keypoint objectness loss gain (pose tasks)
 rle: 1.0 # (float) rle loss gain (pose tasks)

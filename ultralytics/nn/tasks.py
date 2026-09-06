@@ -1882,6 +1882,7 @@ def parse_model(d, ch, verbose=True):
     nc, act, scales, end2end = (d.get(x) for x in ("nc", "activation", "scales", "end2end"))
     reg_max = d.get("reg_max", 16)
     sigmoid_box = d.get("sigmoid_box", False)
+    o2o_grad = float(d.get("o2o_grad") or 0.0)  # fraction of the one2one gradient reaching the trunk (0.0 = detached)
     depth, width, kpt_shape = (d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
     scale = d.get("scale")
     scale_vars = {}  # optional named per-scale args, from a scales entry's 4th element (a dict)
@@ -2066,6 +2067,8 @@ def parse_model(d, ch, verbose=True):
             c2 = ch[f]
 
         m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+        if m is Detect and o2o_grad:
+            m_.o2o_grad = o2o_grad
         t = str(m)[8:-2].replace("__main__.", "")  # module type
         m_.np = sum(x.numel() for x in m_.parameters())  # number params
         m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
