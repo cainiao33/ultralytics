@@ -37,6 +37,21 @@ __all__ = (
 )
 
 
+class _ScaleGrad(torch.autograd.Function):
+    """Identity in the forward pass, gradient scaled by ``lam`` on the way back."""
+
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, lam: float) -> torch.Tensor:
+        """Return x unchanged, remembering the backward scale."""
+        ctx.lam = lam
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, g: torch.Tensor) -> tuple[torch.Tensor, None]:
+        """Scale the incoming gradient by lam."""
+        return g * ctx.lam, None
+
+
 class Detect(nn.Module):
     """YOLO Detect head for object detection models.
 
@@ -184,8 +199,14 @@ class Detect(nn.Module):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
         preds = self.forward_head(x, **self.one2many)
         if getattr(self, "one2one_cv2", None) is not None:
-            x_detach = [xi.detach() for xi in x] if self.training else x  # detach keeps one2one out of the backbone
-            one2one = self.forward_head(x_detach, **self.one2one)
+            lam = getattr(self, "o2o_grad", 0.0)  # fraction of the one2one gradient that reaches the trunk
+            if not self.training:
+                x_o2o = x
+            elif lam == 0.0:
+                x_o2o = [xi.detach() for xi in x]  # the literal upstream line, so lam=0 is bit-exact
+            else:
+                x_o2o = [_ScaleGrad.apply(xi, lam) for xi in x]
+            one2one = self.forward_head(x_o2o, **self.one2one)
             preds = {"one2many": preds, "one2one": one2one}
         if self.training:
             if hasattr(self, "aux_fg"):  # training-only foreground auxiliary (yolo27), inert in eval/export
