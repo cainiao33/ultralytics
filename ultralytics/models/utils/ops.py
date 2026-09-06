@@ -1,5 +1,4 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-
 """Hungarian matching, contrastive denoising, and box IoU for DETR-family detection models.
 
 The IoU helpers here are deliberately separate from ultralytics.utils.metrics.bbox_iou. That one adds eps to the union
@@ -113,9 +112,7 @@ def _aligned_inter_union(
     return inter, union, boxes1, boxes2
 
 
-def aligned_box_iou(
-    boxes1: torch.Tensor, boxes2: torch.Tensor, eps: float = 1e-7, xywh: bool = False
-) -> torch.Tensor:
+def aligned_box_iou(boxes1: torch.Tensor, boxes2: torch.Tensor, eps: float = 1e-7, xywh: bool = False) -> torch.Tensor:
     """Compute element-wise IoU for matched box pairs.
 
     Args:

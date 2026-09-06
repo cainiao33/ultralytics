@@ -155,13 +155,13 @@ be reproduced with `yolo val model=yolo27n.pt data=coco.yaml`.
 
     with latency on an NVIDIA T4 (TensorRT) and CPU (ONNX).
 
-    | Model           | Params  | GFLOPs | CPU ONNX  | T4 TensorRT   | NYU* δ1 | KITTI-580* δ1 | bench mean |
-    | --------------- | ------- | ------ | --------- | ------------  | ------- | ------------- | ---------- |
-    | YOLO27n-depth   | 5.42 M  | 49.1   | 126.7 ms  | **2.976 ms**  | 0.8314  | 0.8256        | 0.7238     |
-    | YOLO27s-depth   | 13.04 M | 76.8   | 198.1 ms  | **4.534 ms**  | 0.8682  | 0.7835        | 0.7454     |
-    | YOLO27m-depth   | 23.39 M | 143.1  | 292.4 ms  | **7.170 ms**  | 0.8652  | 0.7746        | 0.7476     |
-    | YOLO27l-depth   | 28.06 M | 174.3  | 380.2 ms  | **9.243 ms**  | 0.8742  | 0.7862        | 0.7616     |
-    | YOLO27x-depth   | 59.33 M | 340.7  | 627.9 ms  | **17.001 ms** | 0.8711  | 0.8041        | 0.7527     |
+    | Model         | Params  | GFLOPs | CPU ONNX | T4 TensorRT   | NYU* δ1 | KITTI-580* δ1 | bench mean |
+    | ------------- | ------- | ------ | -------- | ------------- | ------- | ------------- | ---------- |
+    | YOLO27n-depth | 5.42 M  | 49.1   | 126.7 ms | **2.976 ms**  | 0.8314  | 0.8256        | 0.7238     |
+    | YOLO27s-depth | 13.04 M | 76.8   | 198.1 ms | **4.534 ms**  | 0.8682  | 0.7835        | 0.7454     |
+    | YOLO27m-depth | 23.39 M | 143.1  | 292.4 ms | **7.170 ms**  | 0.8652  | 0.7746        | 0.7476     |
+    | YOLO27l-depth | 28.06 M | 174.3  | 380.2 ms | **9.243 ms**  | 0.8742  | 0.7862        | 0.7616     |
+    | YOLO27x-depth | 59.33 M | 340.7  | 627.9 ms | **17.001 ms** | 0.8711  | 0.8041        | 0.7527     |
 
 === "Classification (ImageNet)"
 

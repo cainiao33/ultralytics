@@ -214,8 +214,8 @@ def _add_deim_fusion_barrier(network, trt) -> list[str]:
     (the per-feature-level value tensors). Marking the layer's whole floating point I/O covers both and is derived from
     the graph structure, so it does not depend on ONNX node numbering, which shifts between checkpoints.
 
-    The extra tensors are auxiliary: `metadata["output_names"]` records the real model outputs so `TensorRTBackend`
-    can ignore them at inference time.
+    The extra tensors are auxiliary: `metadata["output_names"]` records the real model outputs so `TensorRTBackend` can
+    ignore them at inference time.
     """
     marked = []
     seen = set()
@@ -265,17 +265,14 @@ def _pin_deim_fp32_layers(network, trt) -> int:
         layer = network.get_layer(i)
         name = layer.name or ""
         pin = False
-        if layer.type == softmax_type:
-            pin = True
-        elif layer.type == normalization_type:
-            pin = True
-        elif norm_re.search(name) and layer.type == reduce_type:
-            pin = True
-        elif norm_re.search(name) and layer.type == unary_type and sqrt_re.search(name):
-            pin = True
-        elif norm_re.search(name) and layer.type == elementwise_type and pow_re.search(name):
-            pin = True
-        elif norm_re.search(name) and layer.type in compute_types:
+        if (
+            layer.type == softmax_type
+            or layer.type == normalization_type
+            or (norm_re.search(name) and layer.type == reduce_type)
+            or (norm_re.search(name) and layer.type == unary_type and sqrt_re.search(name))
+            or (norm_re.search(name) and layer.type == elementwise_type and pow_re.search(name))
+            or (norm_re.search(name) and layer.type in compute_types)
+        ):
             pin = True
 
         if pin:

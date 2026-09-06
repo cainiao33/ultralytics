@@ -17,8 +17,8 @@ reg_max: 1 # DFL bins
 aux_fg: True # training-only class-agnostic foreground branch on the Detect head (mix target, o2m schedule)
 scales: # model compound scaling constants, i.e. 'model=yolo27n.yaml' will call yolo27.yaml with scale 'n'
   # [depth, width, max_channels, {named per-scale args}]
-  n: [0.50, 0.25, 1024, {bbp3e: 0.5}] # summary: 234 layers, 2,836,368 parameters, 2,836,368 gradients, 8.2 GFLOPs
-  s: [0.50, 0.50, 1024, {bbp3e: 0.5}] # summary: 234 layers, 11,217,872 parameters, 11,217,872 gradients, 31.4 GFLOPs
+  n: [0.50, 0.25, 1024, { bbp3e: 0.5 }] # summary: 234 layers, 2,836,368 parameters, 2,836,368 gradients, 8.2 GFLOPs
+  s: [0.50, 0.50, 1024, { bbp3e: 0.5 }] # summary: 234 layers, 11,217,872 parameters, 11,217,872 gradients, 31.4 GFLOPs
 
 # YOLO27n backbone
 backbone:

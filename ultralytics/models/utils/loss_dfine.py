@@ -1,5 +1,4 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-
 """Standalone DEIM-style loss with FGL (Fine-Grained Localization) and DDF (Decoupled Distillation Focal) terms.
 
 This loss is used by the ``DeimDecoder`` head. ``RTDETRDecoder`` continues to use ``RTDETRDetectionLoss``. Dispatch is
@@ -12,8 +11,8 @@ from typing import Any
 
 import torch
 import torch.distributed as dist
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from ultralytics.nn.modules.utils import bbox2distance
 from ultralytics.utils.loss import FocalLoss, MALoss, VarifocalLoss
@@ -44,7 +43,7 @@ def _global_num_gts(num_gts: int, device: torch.device) -> float:
 
 
 class DfineLoss(nn.Module):
-    """Standalone DFine/DEIM-style loss with local FGL/DDF terms and optional union-set matching."""
+    """Standalone define/DEIM-style loss with local FGL/DDF terms and optional union-set matching."""
 
     supports_dfine = True
 
@@ -412,8 +411,15 @@ class DfineLoss(nn.Module):
             cls_indices = cls_indices_list[i] if isinstance(cls_indices_list[0], list) else cls_indices_list
             box_indices = box_indices_list[i] if isinstance(box_indices_list[0], list) else box_indices_list
             layer_loss = self._compute_layer_losses(
-                aux_bboxes, aux_scores, gt_cls, gt_bboxes,
-                cls_indices, box_indices, cls_norm, box_norm, postfix=postfix,
+                aux_bboxes,
+                aux_scores,
+                gt_cls,
+                gt_bboxes,
+                cls_indices,
+                box_indices,
+                cls_norm,
+                box_norm,
+                postfix=postfix,
             )
             loss[0] += layer_loss[f"loss_class{postfix}"]
             loss[1] += layer_loss[f"loss_bbox{postfix}"]
@@ -433,7 +439,7 @@ class DfineLoss(nn.Module):
         weight: torch.Tensor | None = None,
         avg_factor: float | None = None,
     ) -> torch.Tensor:
-        """Compute the unimodal distribution focal loss over a pair of neighbouring distribution bins.
+        """Compute the unimodal distribution focal loss over a pair of neighboring distribution bins.
 
         Args:
             pred (torch.Tensor): Predicted corner logits with shape (M * 4, reg_max + 1).
@@ -499,11 +505,17 @@ class DfineLoss(nn.Module):
         weight_targets_local = weight_targets_local.unsqueeze(-1).repeat(1, 1, 4).reshape(-1).detach()
         pred_all_f = pred_all.float()
         teacher_all_f = teacher_all.float()
-        loss_match_local = weight_targets_local * (self.local_temperature**2) * (
-            self.kl_loss(
-                F.log_softmax(pred_all_f / self.local_temperature, dim=1),
-                F.softmax(teacher_all_f.detach() / self.local_temperature, dim=1),
-            ).sum(-1).to(pred_all.dtype)
+        loss_match_local = (
+            weight_targets_local
+            * (self.local_temperature**2)
+            * (
+                self.kl_loss(
+                    F.log_softmax(pred_all_f / self.local_temperature, dim=1),
+                    F.softmax(teacher_all_f.detach() / self.local_temperature, dim=1),
+                )
+                .sum(-1)
+                .to(pred_all.dtype)
+            )
         )
         if not is_dn:
             batch_scale = 8 / pred_bboxes.shape[0]
@@ -656,11 +668,15 @@ class DfineLoss(nn.Module):
             pred_scores[-1],
             pred_corners_all[-1],
             ref_points_all[-1],
-            gt_bboxes, gt_cls, gt_groups,
+            gt_bboxes,
+            gt_cls,
+            gt_groups,
             norm_boxes,
-            dfine_meta.get("up"), dfine_meta.get("reg_scale"),
+            dfine_meta.get("up"),
+            dfine_meta.get("reg_scale"),
             match_indices=main_indices,
-            postfix=postfix, is_dn=is_dn,
+            postfix=postfix,
+            is_dn=is_dn,
         )
 
         if include_local_aux and self.aux_loss and pred_bboxes.shape[0] > 1:
@@ -671,23 +687,29 @@ class DfineLoss(nn.Module):
             for i, (aux_bboxes, aux_scores) in enumerate(zip(pred_bboxes[:-1], pred_scores[:-1])):
                 layer_indices = aux_indices[i] if isinstance(aux_indices[0], list) else aux_indices
                 layer_loss = self._loss_local_single(
-                    aux_bboxes, aux_scores,
-                    pred_corners_all[i], ref_points_all[i],
-                    gt_bboxes, gt_cls, gt_groups,
+                    aux_bboxes,
+                    aux_scores,
+                    pred_corners_all[i],
+                    ref_points_all[i],
+                    gt_bboxes,
+                    gt_cls,
+                    gt_groups,
                     norm_boxes,
-                    dfine_meta.get("up"), dfine_meta.get("reg_scale"),
+                    dfine_meta.get("up"),
+                    dfine_meta.get("reg_scale"),
                     match_indices=layer_indices,
                     teacher_corners=teacher_corners,
                     teacher_logits=teacher_logits.detach(),
-                    postfix=postfix, is_dn=is_dn,
+                    postfix=postfix,
+                    is_dn=is_dn,
                 )
                 loss_fgl_aux += layer_loss[f"loss_fgl{postfix}"]
                 loss_ddf_aux += layer_loss[f"loss_ddf{postfix}"]
 
             losses[f"loss_fgl_aux{postfix}"] = loss_fgl_aux
-            losses[f"loss_ddf{postfix}"] = losses.get(
-                f"loss_ddf{postfix}", torch.tensor(0.0, device=pred_bboxes.device)
-            ) + loss_ddf_aux
+            losses[f"loss_ddf{postfix}"] = (
+                losses.get(f"loss_ddf{postfix}", torch.tensor(0.0, device=pred_bboxes.device)) + loss_ddf_aux
+            )
         return losses
 
     def _prepare_aux_indices(
@@ -784,10 +806,15 @@ class DfineLoss(nn.Module):
         if pre_bboxes is None or pre_logits is None or cls_indices is None:
             return {}
         return self._compute_layer_losses(
-            pre_bboxes, pre_logits, gt_cls, gt_bboxes,
+            pre_bboxes,
+            pre_logits,
+            gt_cls,
+            gt_bboxes,
             cls_indices,
             box_indices if box_indices is not None else cls_indices,
-            cls_norm, box_norm, postfix=postfix,
+            cls_norm,
+            box_norm,
+            postfix=postfix,
         )
 
     def forward(
@@ -845,31 +872,52 @@ class DfineLoss(nn.Module):
         main_box_indices = box_union_indices if box_union_indices is not None else main_indices
 
         total_loss = self._compute_layer_losses(
-            pred_bboxes[-1], pred_scores[-1], gt_cls, gt_bboxes,
-            main_indices, main_box_indices, global_num_gts, norm_boxes,
+            pred_bboxes[-1],
+            pred_scores[-1],
+            gt_cls,
+            gt_bboxes,
+            main_indices,
+            main_box_indices,
+            global_num_gts,
+            norm_boxes,
         )
 
         if self.aux_loss and pred_bboxes.shape[0] > 1:
             aux_box_indices = box_union_indices if box_union_indices is not None else aux_indices
             total_loss.update(
                 self._compute_aux_losses(
-                    pred_bboxes[:-1], pred_scores[:-1], gt_cls, gt_bboxes,
-                    aux_indices, aux_box_indices, global_num_gts, norm_boxes,
+                    pred_bboxes[:-1],
+                    pred_scores[:-1],
+                    gt_cls,
+                    gt_bboxes,
+                    aux_indices,
+                    aux_box_indices,
+                    global_num_gts,
+                    norm_boxes,
                 )
             )
 
         total_loss.update(
             self._compute_pre_losses(
-                pre_bboxes, pre_logits, gt_cls, gt_bboxes,
+                pre_bboxes,
+                pre_logits,
+                gt_cls,
+                gt_bboxes,
                 pre_indices,
                 box_union_indices if box_union_indices is not None else pre_indices,
-                global_num_gts, norm_boxes, postfix="_pre",
+                global_num_gts,
+                norm_boxes,
+                postfix="_pre",
             )
         )
 
         total_loss.update(
             self._get_local_bundle(
-                pred_bboxes, pred_scores, batch, norm_boxes, dfine_meta,
+                pred_bboxes,
+                pred_scores,
+                batch,
+                norm_boxes,
+                dfine_meta,
                 main_indices=main_box_indices,
                 aux_indices=box_union_indices if box_union_indices is not None else aux_indices,
             )
@@ -882,16 +930,30 @@ class DfineLoss(nn.Module):
 
             total_loss.update(
                 self._compute_layer_losses(
-                    dn_bboxes[-1], dn_scores[-1], gt_cls, gt_bboxes,
-                    dn_match_indices, dn_match_indices, dn_norm, dn_norm, postfix="_dn",
+                    dn_bboxes[-1],
+                    dn_scores[-1],
+                    gt_cls,
+                    gt_bboxes,
+                    dn_match_indices,
+                    dn_match_indices,
+                    dn_norm,
+                    dn_norm,
+                    postfix="_dn",
                 )
             )
             if self.aux_loss and dn_bboxes.shape[0] > 1:
                 dn_aux_indices = [dn_match_indices for _ in range(dn_bboxes.shape[0] - 1)]
                 total_loss.update(
                     self._compute_aux_losses(
-                        dn_bboxes[:-1], dn_scores[:-1], gt_cls, gt_bboxes,
-                        dn_aux_indices, dn_aux_indices, dn_norm, dn_norm, postfix="_dn",
+                        dn_bboxes[:-1],
+                        dn_scores[:-1],
+                        gt_cls,
+                        gt_bboxes,
+                        dn_aux_indices,
+                        dn_aux_indices,
+                        dn_norm,
+                        dn_norm,
+                        postfix="_dn",
                     )
                 )
 
@@ -910,17 +972,31 @@ class DfineLoss(nn.Module):
 
             total_loss.update(
                 self._get_local_bundle(
-                    dn_bboxes, dn_scores, batch, dn_norm, dn_dfine_meta,
-                    main_indices=dn_match_indices, aux_indices=dn_match_indices,
-                    postfix="_dn", is_dn=True, include_local_aux=True,
+                    dn_bboxes,
+                    dn_scores,
+                    batch,
+                    dn_norm,
+                    dn_dfine_meta,
+                    main_indices=dn_match_indices,
+                    aux_indices=dn_match_indices,
+                    postfix="_dn",
+                    is_dn=True,
+                    include_local_aux=True,
                 )
             )
 
             dn_pre_bboxes, dn_pre_logits, _ = self._prepare_pre_indices(dn_dfine_meta, gt_bboxes, gt_cls, gt_groups)
             total_loss.update(
                 self._compute_pre_losses(
-                    dn_pre_bboxes, dn_pre_logits, gt_cls, gt_bboxes,
-                    dn_match_indices, dn_match_indices, dn_norm, dn_norm, postfix="_dn_pre",
+                    dn_pre_bboxes,
+                    dn_pre_logits,
+                    gt_cls,
+                    gt_bboxes,
+                    dn_match_indices,
+                    dn_match_indices,
+                    dn_norm,
+                    dn_norm,
+                    postfix="_dn_pre",
                 )
             )
 

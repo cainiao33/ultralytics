@@ -1,3 +1,5 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
 optimizer: AdamW
 lr0: 0.0017
 lrf: 0.02486

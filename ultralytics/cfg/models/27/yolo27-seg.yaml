@@ -14,11 +14,11 @@ end2end: True # whether to use end-to-end mode
 reg_max: 1 # DFL bins
 scales: # model compound scaling constants, i.e. 'model=yolo27n-seg.yaml' will call yolo27-seg.yaml with scale 'n'
   # [depth, width, max_channels, {named per-scale args}]
-  n: [0.50, 0.25, 1024, {bbp3e: 0.5}] # summary: 271 layers, 3,351,072 parameters, 3,351,072 gradients, 12.7 GFLOPs
-  s: [0.50, 0.50, 1024, {bbp3e: 0.5}] # summary: 271 layers, 12,980,960 parameters, 12,980,960 gradients, 47.9 GFLOPs
-  m: [0.50, 1.00, 512, {bbp3e: 0.25}] # summary: 291 layers, 29,508,768 parameters, 29,508,768 gradients, 156.5 GFLOPs
-  l: [1.00, 1.00, 512, {bbp3e: 0.25}] # summary: 403 layers, 34,178,976 parameters, 34,178,976 gradients, 178.4 GFLOPs
-  x: [1.00, 1.50, 512, {bbp3e: 0.25}] # summary: 403 layers, 76,692,032 parameters, 76,692,032 gradients, 399.0 GFLOPs
+  n: [0.50, 0.25, 1024, { bbp3e: 0.5 }] # summary: 271 layers, 3,351,072 parameters, 3,351,072 gradients, 12.7 GFLOPs
+  s: [0.50, 0.50, 1024, { bbp3e: 0.5 }] # summary: 271 layers, 12,980,960 parameters, 12,980,960 gradients, 47.9 GFLOPs
+  m: [0.50, 1.00, 512, { bbp3e: 0.25 }] # summary: 291 layers, 29,508,768 parameters, 29,508,768 gradients, 156.5 GFLOPs
+  l: [1.00, 1.00, 512, { bbp3e: 0.25 }] # summary: 403 layers, 34,178,976 parameters, 34,178,976 gradients, 178.4 GFLOPs
+  x: [1.00, 1.50, 512, { bbp3e: 0.25 }] # summary: 403 layers, 76,692,032 parameters, 76,692,032 gradients, 399.0 GFLOPs
 
 # YOLO27n-seg backbone
 backbone:

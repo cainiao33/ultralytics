@@ -15,11 +15,11 @@ reg_max: 1 # DFL bins
 kpt_shape: [17, 3] # number of keypoints, number of dims (2 for x,y or 3 for x,y,visible)
 scales: # model compound scaling constants, i.e. 'model=yolo27n-pose.yaml' will call yolo27-pose.yaml with scale 'n'
   # [depth, width, max_channels, {named per-scale args}]
-  n: [0.50, 0.25, 1024, {bbp3e: 0.5}] # summary: 325 layers, 3,719,412 parameters, 3,719,412 gradients, 12.3 GFLOPs
-  s: [0.50, 0.50, 1024, {bbp3e: 0.5}] # summary: 325 layers, 12,639,476 parameters, 12,639,476 gradients, 37.7 GFLOPs
-  m: [0.50, 1.00, 512, {bbp3e: 0.25}] # summary: 345 layers, 25,553,020 parameters, 25,553,020 gradients, 103.4 GFLOPs
-  l: [1.00, 1.00, 512, {bbp3e: 0.25}] # summary: 457 layers, 30,223,228 parameters, 30,223,228 gradients, 125.4 GFLOPs
-  x: [1.00, 1.50, 512, {bbp3e: 0.25}] # summary: 457 layers, 67,733,212 parameters, 67,733,212 gradients, 280.0 GFLOPs
+  n: [0.50, 0.25, 1024, { bbp3e: 0.5 }] # summary: 325 layers, 3,719,412 parameters, 3,719,412 gradients, 12.3 GFLOPs
+  s: [0.50, 0.50, 1024, { bbp3e: 0.5 }] # summary: 325 layers, 12,639,476 parameters, 12,639,476 gradients, 37.7 GFLOPs
+  m: [0.50, 1.00, 512, { bbp3e: 0.25 }] # summary: 345 layers, 25,553,020 parameters, 25,553,020 gradients, 103.4 GFLOPs
+  l: [1.00, 1.00, 512, { bbp3e: 0.25 }] # summary: 457 layers, 30,223,228 parameters, 30,223,228 gradients, 125.4 GFLOPs
+  x: [1.00, 1.50, 512, { bbp3e: 0.25 }] # summary: 457 layers, 67,733,212 parameters, 67,733,212 gradients, 280.0 GFLOPs
 
 # YOLO27n-pose backbone
 backbone:

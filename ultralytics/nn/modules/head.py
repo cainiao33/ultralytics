@@ -1786,7 +1786,7 @@ class RTDETRDecoder(nn.Module):
         # NOTE: the simplified `nn.ModuleList(Conv(x, hd, act=False) for x in ch)` is not consistent with .pt weights.
         return nn.ModuleList(nn.Sequential(nn.Conv2d(x, hd, 1, bias=False), nn.BatchNorm2d(hd)) for x in ch)
 
-    def _build_query_pos_head(self, hd: int) -> "MLP":
+    def _build_query_pos_head(self, hd: int) -> MLP:
         """Build the reference-box position MLP; override to change depth, width, or activation."""
         return MLP(4, 2 * hd, hd, num_layers=2)
 
@@ -1794,7 +1794,7 @@ class RTDETRDecoder(nn.Module):
         """Build the encoder-memory projection applied before query selection; override to skip (nn.Identity)."""
         return nn.Sequential(nn.Linear(hd, hd), nn.LayerNorm(hd))
 
-    def _build_bbox_head(self, hd: int) -> "MLP":
+    def _build_bbox_head(self, hd: int) -> MLP:
         """Build one 3-layer bbox-regression MLP (reused for enc head and each decoder layer); override for act."""
         return MLP(hd, hd, 4, num_layers=3)
 
