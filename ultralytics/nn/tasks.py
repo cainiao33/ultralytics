@@ -95,6 +95,7 @@ from ultralytics.utils import (
     colorstr,
     emojis,
 )
+from ultralytics.nn.modules.head import parse_o2o_grad
 from ultralytics.utils.checks import REMOTE_FILE_PREFIXES, check_file, check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import (
     DepthLoss26,
@@ -2142,7 +2143,7 @@ def parse_model(d, ch, verbose=True):
     nc, act, scales, end2end = (d.get(x) for x in ("nc", "activation", "scales", "end2end"))
     reg_max = d.get("reg_max", 16)
     aux_fg = d.get("aux_fg", False)  # yolo27: training-only class-agnostic foreground branch on the Detect head
-    o2o_grad = float(d.get("o2o_grad") or 0.0)  # fraction of the one2one gradient reaching the trunk (0.0 = detached)
+    o2o_grad = parse_o2o_grad(d.get("o2o_grad"))  # per-branch (box, cls) one2one gradient reaching the trunk
     depth, width, kpt_shape = (d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
     scale = d.get("scale")
     scale_vars = {}  # optional named per-scale args, from a scales entry's 4th element (a dict)
@@ -2331,7 +2332,7 @@ def parse_model(d, ch, verbose=True):
         m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
         if m is Detect:
             m_.aux_fg_on = aux_fg  # architecture flag; DetectionTrainer attaches the branch before weight loading
-            if o2o_grad:
+            if any(o2o_grad):
                 m_.o2o_grad = o2o_grad
         if m is SPPF and len(args) <= 3:  # Legacy YAML rows predate the unactivated YOLO26 SPPF.
             for block in m_ if n > 1 else [m_]:

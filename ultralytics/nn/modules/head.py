@@ -52,6 +52,31 @@ class _ScaleGrad(torch.autograd.Function):
         return g * ctx.lam, None
 
 
+def parse_o2o_grad(value) -> tuple[float, float]:
+    """Normalize an ``o2o_grad`` setting to per-branch ``(box, cls)`` trunk-gradient scales.
+
+    A single number applies to both one2one branches; a pair sets them separately, so the box branch can feed the
+    trunk at full strength while the class branch — the one whose one-positive-per-object target conflicts with
+    one2many's dense assignment — is damped, or the other way round.
+
+    Args:
+        value (float | int | str | Sequence | None): A number for both branches, or a ``box, cls`` pair.
+
+    Returns:
+        (tuple[float, float]): The box and cls trunk-gradient scales, each in [0, 1].
+    """
+    if value is None:
+        return 0.0, 0.0
+    if isinstance(value, str):
+        value = [v for v in value.replace(",", " ").split() if v]
+    lams = (float(value),) if isinstance(value, (int, float)) else tuple(float(v) for v in value)
+    if len(lams) == 1:
+        lams *= 2
+    if len(lams) != 2 or not all(0.0 <= v <= 1.0 for v in lams):
+        raise ValueError(f"'o2o_grad={value}' must be one value or a 'box,cls' pair, each in [0.0, 1.0].")
+    return lams
+
+
 class Detect(nn.Module):
     """YOLO Detect head for object detection models.
 
@@ -183,14 +208,24 @@ class Detect(nn.Module):
         self._end2end = value
 
     def forward_head(
-        self, x: list[torch.Tensor], box_head: torch.nn.Module = None, cls_head: torch.nn.Module = None
+        self,
+        x: list[torch.Tensor],
+        box_head: torch.nn.Module = None,
+        cls_head: torch.nn.Module = None,
+        x_cls: list[torch.Tensor] | None = None,
     ) -> dict[str, torch.Tensor]:
-        """Concatenates and returns predicted bounding boxes and class probabilities."""
+        """Concatenates and returns predicted bounding boxes and class probabilities.
+
+        ``x_cls`` feeds the class branch a separately prepared view of the same features, which ``o2o_grad`` uses to
+        scale the two branches' trunk gradients independently; it defaults to ``x``.
+        """
         if box_head is None or cls_head is None:  # for fused inference
             return {}
         bs = x[0].shape[0]  # batch size
+        if x_cls is None:
+            x_cls = x
         boxes = torch.cat([box_head[i](x[i]).view(bs, 4 * self.reg_max, -1) for i in range(self.nl)], dim=-1)
-        scores = torch.cat([cls_head[i](x[i]).view(bs, self.nc, -1) for i in range(self.nl)], dim=-1)
+        scores = torch.cat([cls_head[i](x_cls[i]).view(bs, self.nc, -1) for i in range(self.nl)], dim=-1)
         return {"boxes": boxes, "scores": scores, "feats": x}
 
     def forward(
@@ -200,13 +235,21 @@ class Detect(nn.Module):
         preds = self.forward_head(x, **self.one2many)
         if getattr(self, "one2one_cv2", None) is not None:
             lam = getattr(self, "o2o_grad", 0.0)  # fraction of the one2one gradient that reaches the trunk
+            lam_box, lam_cls = lam if isinstance(lam, (tuple, list)) else (lam, lam)
             if not self.training:
-                x_o2o = x
-            elif lam == 0.0:
-                x_o2o = [xi.detach() for xi in x]  # the literal upstream line, so lam=0 is bit-exact
-            else:
-                x_o2o = [_ScaleGrad.apply(xi, lam) for xi in x]
-            one2one = self.forward_head(x_o2o, **self.one2one)
+                x_box = x_cls = x
+            elif lam_box == lam_cls:  # one shared node, so the equal-lambda cases stay bit-exact
+                x_box = x_cls = (
+                    [xi.detach() for xi in x]  # the literal upstream line, so lam=0 is bit-exact
+                    if lam_box == 0.0
+                    else [_ScaleGrad.apply(xi, lam_box) for xi in x]
+                )
+            else:  # per-branch: the two paths' gradients are scaled separately and sum at the trunk
+                x_box, x_cls = (
+                    [xi.detach() for xi in x] if not lm else [_ScaleGrad.apply(xi, lm) for xi in x]
+                    for lm in (lam_box, lam_cls)
+                )
+            one2one = self.forward_head(x_box, **self.one2one, x_cls=x_cls)
             preds = {"one2many": preds, "one2one": one2one}
         if self.training:
             if hasattr(self, "aux_fg"):  # training-only foreground auxiliary (yolo27), inert in eval/export

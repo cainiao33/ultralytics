@@ -14,6 +14,7 @@ from torch import nn
 from ultralytics.data import build_dataloader, build_yolo_dataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
+from ultralytics.nn.modules.head import parse_o2o_grad
 from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.patches import override_configs
@@ -190,8 +191,8 @@ class DetectionTrainer(BaseTrainer):
         ``o2o_grad=0.1`` on the launch command instead of a family of near-identical model YAMLs. It lands in
         ``model.yaml``, so the head is rebuilt the same way on resume, val and export.
         """
-        lam = getattr(self.args, "o2o_grad", 0.0) or 0.0
-        if not cfg or not lam:
+        lam = getattr(self.args, "o2o_grad", None)
+        if not cfg or not any(parse_o2o_grad(lam)):
             return cfg
         cfg = dict(cfg) if isinstance(cfg, dict) else yaml_model_load(cfg)
         cfg["o2o_grad"] = lam
